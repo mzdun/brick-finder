@@ -2,6 +2,23 @@
 # This file is licensed under MIT license (see LICENSE for details)
 
 cmake_minimum_required (VERSION 4.0)
+
+if (CMAKE_GENERATOR MATCHES "^Visual Studio")
+set(VS_GEN ON)
+else()
+set(VS_GEN OFF)
+endif()
+
+if (CMAKE_VERSION VERSION_LESS 4.0.3)
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "a9e1cf81-9932-4810-974b-6eccaf14e457")
+elseif(CMAKE_VERSION VERSION_LESS 4.3.0)
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "d0edc3af-4c50-42ea-a356-e2862fe7a444")
+elseif(CMAKE_VERSION VERSION_LESS 4.4.0)
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "451f2fe2-a8a2-47c3-bc32-94786d8fc91b")
+elseif(CMAKE_VERSION VERSION_LESS 4.5.0)
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "f35a9ac6-8463-4d38-8eec-5d6008153e7d")
+endif()
+
 project (brick-finder
   VERSION 0.1.0
   DESCRIPTION "Brick Finder"
@@ -22,6 +39,10 @@ set(BF_SANITIZE OFF CACHE BOOL "Compile with sanitizers enabled")
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if (NOT VS_GEN)
+set(CMAKE_CXX_MODULE_STD 1)
+endif()
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_BINARY_DIR}/conan" "${PROJECT_SOURCE_DIR}/.flow/cmake")
@@ -35,8 +56,7 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)
 find_package(mbits-args REQUIRED)
-find_package(SDL3 REQUIRED)
-find_package(SDL3_image REQUIRED)
+find_package(PNG REQUIRED)
 
 if (BF_TESTING)
   enable_testing()
@@ -58,6 +78,8 @@ old_conan_output_dirs_setup()
 
 if (MSVC)
   set(BF_ADDITIONAL_COMPILE_FLAGS
+    /D_UNICODE
+    /DUNICODE
     /D_CRT_SECURE_NO_WARNINGS
     /D_CRT_NONSTDC_NO_WARNINGS
     /utf-8
@@ -138,68 +160,4 @@ endif()
 include(${PROJECT_SOURCE_DIR}/.flow/packages/config.cmake)
 include(CPack)
 
-configure_file(src/version.in.hh include/bricks/version.hh @ONLY)
-configure_file(src/version.in.cc src/version.cc @ONLY)
-
-set(SRCS
-  src/args.cc
-  src/db.cc
-  src/main.cc
-  src/pool.cc
-  src/str.cc
-  src/pyxel.cc
-  src/sprites.cc
-  src/tool.cc
-  "${CMAKE_CURRENT_BINARY_DIR}/src/version.cc"
-  "${CMAKE_CURRENT_BINARY_DIR}/include/bricks/version.hh"
-)
-
-add_executable(${PROJECT_NAME} ${SRCS})
-
-add_win32_icon(${PROJECT_NAME} "appicon.ico")
-target_compile_options(${PROJECT_NAME} PRIVATE ${BF_ADDITIONAL_COMPILE_FLAGS})
-target_link_options(${PROJECT_NAME} PUBLIC ${BF_ADDITIONAL_LINK_FLAGS})
-target_include_directories(${PROJECT_NAME}
-  PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_BINARY_DIR}/include
-  PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_BINARY_DIR}/src
-)
-target_link_libraries(${PROJECT_NAME} fmt::fmt mbits::args SDL3::SDL3 SDL3_image::SDL3_image)
-set_target_properties(${PROJECT_NAME} PROPERTIES
-  VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
-)
-
-if(WIN32)
-    target_link_options(${PROJECT_NAME} PRIVATE /ENTRY:wmainCRTStartup)
-    target_compile_options(${PROJECT_NAME} PRIVATE /D_UNICODE /DUNICODE)
-endif()
-
-##################################################################
-##  INSTALL
-##################################################################
-
-if (BF_INSTALL)
-  install(TARGETS ${PROJECT_NAME})
-endif()
-
-##################################################################
-##  TESTING
-##################################################################
-
-if (BF_TESTING)
-  file(GLOB EXCLUDES_TEST_SRCS_CC tests/*.cc)
-  file(GLOB EXCLUDES_TEST_SRCS_CPP tests/*.cpp)
-  file(GLOB EXCLUDES_TEST_SRCS_CXX tests/*.cxx)
-  source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/tests FILES
-    ${EXCLUDES_TEST_SRCS_CC}
-    ${EXCLUDES_TEST_SRCS_CPP}
-    ${EXCLUDES_TEST_SRCS_CXX})
-
-  add_project_test(${PROJECT_NAME} ${EXCLUDES_TEST_SRCS_CC} ${EXCLUDES_TEST_SRCS_CPP} ${EXCLUDES_TEST_SRCS_CXX})
-  target_link_libraries(${PROJECT_NAME}-test PUBLIC GTest::gmock_main fmt::fmt)
-
-  add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME}-test "--gtest_output=xml:${TEST_REPORT_DIR}/${PROJECT_NAME}/${TEST_REPORT_FILE}")
-endif()
+add_subdirectory(libs)

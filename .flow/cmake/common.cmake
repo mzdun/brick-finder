@@ -1,13 +1,72 @@
+if (CMAKE_GENERATOR MATCHES "^Visual Studio")
+set(VS_GEN ON)
+else()
+set(VS_GEN OFF)
+endif()
+
 function(add_project_test TARGET)
   cmake_parse_arguments(PARSE_ARGV 1 TST "" "" "")
+
+  set(_OUTPUT ${PROJECT_BINARY_DIR}/bin/tests)
+
   add_executable(${TARGET}-test ${TST_UNPARSED_ARGUMENTS})
-  set_target_properties(${TARGET}-test PROPERTIES FOLDER tests)
+  set_target_properties(${TARGET}-test PROPERTIES
+    FOLDER tests
+    RUNTIME_OUTPUT_DIRECTORY ${_OUTPUT}
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE ${_OUTPUT}
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${_OUTPUT}
+    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${_OUTPUT}
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG ${_OUTPUT}
+  )
   target_compile_options(${TARGET}-test PRIVATE ${BF_ADDITIONAL_COMPILE_FLAGS})
   target_link_options(${TARGET}-test PRIVATE ${BF_ADDITIONAL_LINK_FLAGS})
   target_include_directories(${TARGET}-test
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
     ${CMAKE_CURRENT_BINARY_DIR})
+endfunction()
+
+function(add_module_test TARGET)
+  cmake_parse_arguments(PARSE_ARGV 1 MOD "" "" "EXPORTS;LINK")
+  add_project_test(mod-${TARGET} ${MOD_UNPARSED_ARGUMENTS})
+
+  if (MOD_EXPORTS)
+    if (VS_GEN)
+      target_sources(mod-${TARGET}-test PRIVATE ${MOD_EXPORTS})
+    else()
+      target_sources(mod-${TARGET}-test PRIVATE FILE_SET CXX_MODULES FILES ${MOD_EXPORTS})
+    endif()
+  endif()
+
+  target_link_libraries(mod-${TARGET}-test PUBLIC mod-${TARGET} GTest::gmock_main ${MOD_LINK})
+
+  add_test(NAME mod-${TARGET} COMMAND mod-${TARGET}-test "--gtest_output=xml:${TEST_REPORT_DIR}/${TARGET}/${TEST_REPORT_FILE}")
+endfunction()
+
+function(add_module_library TARGET)
+  cmake_parse_arguments(PARSE_ARGV 1 MOD "" "" "EXPORTS;LINK")
+
+  if (VS_GEN)
+    add_library(mod-${TARGET} ${MOD_UNPARSED_ARGUMENTS} ${MOD_EXPORTS})
+    else()
+    add_library(mod-${TARGET} ${MOD_UNPARSED_ARGUMENTS})
+    if (MOD_EXPORTS)
+      target_sources(mod-${TARGET} PUBLIC
+        FILE_SET CXX_MODULES
+        FILES ${MOD_EXPORTS}
+        BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}"
+      )
+    endif()
+  endif()
+
+  set_target_properties(mod-${TARGET} PROPERTIES FOLDER modules)
+  target_compile_options(mod-${TARGET} PRIVATE ${BF_ADDITIONAL_COMPILE_FLAGS})
+  target_link_options(mod-${TARGET} PRIVATE ${BF_ADDITIONAL_LINK_FLAGS})
+  set_target_properties(mod-${TARGET} PROPERTIES VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
+
+  if (MOD_LINK)
+    target_link_libraries(mod-${TARGET} ${MOD_LINK})
+  endif()
 endfunction()
 
 function(add_win32_icon TARGET NAME)

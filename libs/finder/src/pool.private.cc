@@ -1,48 +1,71 @@
 // Copyright (c) 2026 Marcin Zdun
 // This code is licensed under MIT license (see LICENSE for details)
 
-export module bricks:pool;
+module finder.pool;
 
 import std;
 
-export namespace bricks {
-	enum class task {
-		loading,
-		processing,
-		postprocessing,
-	};
-	void post_task(task type, std::function<void()>&& refref);
-	void run_tasks(unsigned int threads = std::thread::hardware_concurrency());
-}  // namespace bricks
-
 using namespace std::chrono;
 
-namespace bricks {
-	struct thread_task {
-		std::function<void()> callback;
-		task type;
+namespace finder {
+	struct thread_queue {
+		std::queue<callback> loading{}, processing{}, postprocessing{};
 
-		constexpr auto operator<=>(thread_task const& rhs) const noexcept { return type <=> rhs.type; }
+		bool empty() const noexcept { return loading.empty() && processing.empty() && postprocessing.empty(); }
+
+		void push(task type, callback&& callback) {
+			switch (type) {
+				case task::loading:
+					loading.push(std::move(callback));
+					return;
+				case task::processing:
+					processing.push(std::move(callback));
+					return;
+				case task::postprocessing:
+					postprocessing.push(std::move(callback));
+					return;
+			}
+		}
+
+		callback& front() {
+			if (!postprocessing.empty()) {
+				return postprocessing.front();
+			}
+			if (!processing.empty()) {
+				return processing.front();
+			}
+			return loading.front();
+		}
+
+		void pop() {
+			if (!postprocessing.empty()) {
+				postprocessing.pop();
+			} else if (!processing.empty()) {
+				processing.pop();
+			} else {
+				return loading.pop();
+			}
+		}
 	};
 
 	class thread_pool {
 	public:
 		~thread_pool();
-		void post(task type, std::function<void()>&& refref);
+		void post(task type, callback&& refref);
 		void run(unsigned int threads);
 
 	private:
 		void run_on_thread();
-		std::function<void()> get_task();
+		callback get_task();
 		void report_end(steady_clock::duration runtime);
 
 		bool done() const noexcept { return given_out == returned && tasks.empty(); }
 
 		mutable std::mutex mutex{};
 		std::condition_variable cv{};
-		std::priority_queue<thread_task> tasks{};
-		size_t given_out{};
-		size_t returned{};
+		thread_queue tasks{};
+		std::size_t given_out{};
+		std::size_t returned{};
 		steady_clock::duration total_runtime{};
 		steady_clock::duration threaded_runtime{};
 	};
@@ -52,7 +75,7 @@ namespace bricks {
 		return pool;
 	}
 
-	void post_task(task type, std::function<void()>&& refref) { instance().post(type, std::move(refref)); }
+	void post_task(task type, callback&& refref) { instance().post(type, std::move(refref)); }
 	void run_tasks(unsigned int threads) { instance().run(threads); }
 
 #define LOCK \
@@ -66,10 +89,10 @@ namespace bricks {
 		std::print("total: {}.{:03} s\n", total.count() / 1000, total.count() % 1000);
 	}
 
-	void thread_pool::post(task type, std::function<void()>&& refref) {
+	void thread_pool::post(task type, callback&& refref) {
 		{
 			LOCK;
-			tasks.push({std::move(refref), type});
+			tasks.push(type, std::move(refref));
 		}
 		cv.notify_one();
 	}
@@ -92,14 +115,14 @@ namespace bricks {
 		threaded_runtime += steady_clock::now() - then;
 	}
 
-	std::function<void()> thread_pool::get_task() {
+	callback thread_pool::get_task() {
 		std::unique_lock lock{mutex};
 
-		std::function<void()> task{};
+		callback task{};
 
 		while (!done()) {
 			if (!tasks.empty()) {
-				task = tasks.top().callback;
+				task = std::move(tasks.front());
 				tasks.pop();
 				++given_out;
 				break;
@@ -112,7 +135,7 @@ namespace bricks {
 	}
 
 	void thread_pool::report_end(steady_clock::duration runtime) {
-		LOCK;  //
+		LOCK;
 		++returned;
 		total_runtime += runtime;
 
@@ -135,4 +158,4 @@ namespace bricks {
 			report_end(runtime);
 		}
 	}
-}  // namespace bricks
+}  // namespace finder

@@ -2,7 +2,7 @@
 mbits-args/0.12.3
 gtest/1.18.0
 fmt/12.2.0
-sdl_image/3.4.4
+libpng/1.6.58
 
 [generators]
 CMakeDeps

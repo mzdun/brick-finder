@@ -27,7 +27,8 @@ compiler:
 
 postproc:
   exclude:
-    - { github_os: ubuntu-24.04, sanitizer: true }
+    - { github_os: ubuntu-24.04 }
+    - { github_os: ubuntu-22.04 }
     - { github_os: ubuntu-26.04, sanitizer: true }
   include:
     - { os: ubuntu, gcc_ver: 13 }
