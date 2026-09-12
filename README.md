@@ -53,12 +53,12 @@ To configure the project:
 
 - [Python 3.12](https://www.python.org/) to run all the tools and scripts, including `./flow`.
 - [Conan 2](https://conan.io/) to get all the dependencies.
-- [CMake 3.28](https://cmake.org/) to configure the build and to pack the binaries.
+- [CMake 4.0](https://cmake.org/) to configure the build and to pack the binaries.
 
 To build the project:
 
 - On Windows, Visual Studio 2022.
-- On Linux, GCC 13 and [Ninja 1.11](https://ninja-build.org/).
+- On Linux, GCC 15 and [Ninja 1.11](https://ninja-build.org/).
 
 Each of the commands below can substitute `--rel` parameter with `--dbg` to build a debug build.
 

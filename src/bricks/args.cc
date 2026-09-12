@@ -5,10 +5,9 @@ module;
 
 #include <args/parser.hpp>
 
-export module bricks:args;
+export module bricks.args;
 
-import :version;
-import :str;
+import version;
 import std;
 
 namespace args {

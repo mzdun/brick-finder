@@ -2,6 +2,23 @@
 # This file is licensed under MIT license (see LICENSE for details)
 
 cmake_minimum_required (VERSION 4.0)
+
+if (CMAKE_GENERATOR MATCHES "^Visual Studio")
+set(VS_GEN ON)
+else()
+set(VS_GEN OFF)
+endif()
+
+if (CMAKE_VERSION VERSION_LESS 4.0.3)
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "a9e1cf81-9932-4810-974b-6eccaf14e457")
+elseif(CMAKE_VERSION VERSION_LESS 4.3.0)
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "d0edc3af-4c50-42ea-a356-e2862fe7a444")
+elseif(CMAKE_VERSION VERSION_LESS 4.4.0)
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "451f2fe2-a8a2-47c3-bc32-94786d8fc91b")
+elseif(CMAKE_VERSION VERSION_LESS 4.5.0)
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "f35a9ac6-8463-4d38-8eec-5d6008153e7d")
+endif()
+
 project (brick-finder
   VERSION 0.1.0
   DESCRIPTION "Brick Finder"
@@ -22,6 +39,10 @@ set(BF_SANITIZE OFF CACHE BOOL "Compile with sanitizers enabled")
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if (NOT VS_GEN)
+set(CMAKE_CXX_MODULE_STD 1)
+endif()
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_BINARY_DIR}/conan" "${PROJECT_SOURCE_DIR}/.flow/cmake")
@@ -35,8 +56,7 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)
 find_package(mbits-args REQUIRED)
-find_package(SDL3 REQUIRED)
-find_package(SDL3_image REQUIRED)
+find_package(PNG REQUIRED)
 
 if (BF_TESTING)
   enable_testing()
@@ -138,23 +158,49 @@ endif()
 include(${PROJECT_SOURCE_DIR}/.flow/packages/config.cmake)
 include(CPack)
 
-configure_file(src/version.in.hh include/bricks/version.hh @ONLY)
 configure_file(src/version.in.cc src/version.cc @ONLY)
 
 set(SRCS
-  src/args.cc
-  src/db.cc
   src/main.cc
-  src/pool.cc
-  src/str.cc
-  src/pyxel.cc
-  src/sprites.cc
-  src/tool.cc
-  "${CMAKE_CURRENT_BINARY_DIR}/src/version.cc"
-  "${CMAKE_CURRENT_BINARY_DIR}/include/bricks/version.hh"
+  src/finder/pool.private.cc
+  src/finder/task.private.cc
+  src/img/base-impl.cc
+  src/img/img-impl.cc
+  src/img/png.cc
+  src/img/reg-impl.cc
+  src/sprites/db.cc
+  src/sprites/flood_fill.cc
 )
 
+set(MOD_SRCS
+  src/bricks/args.cc
+  src/bricks/run.cc
+  src/bricks/tool.cc
+  src/finder/finder.cc
+  src/finder/pool.cc
+  src/finder/str.cc
+  src/finder/task.cc
+  src/img/base.cc
+  src/img/img.cc
+  src/img/png.cc
+  src/img/reg.cc
+  src/sprites/sprites.cc
+)
+
+set(MOD_GEN_SRCS
+  "${CMAKE_CURRENT_BINARY_DIR}/src/version.cc"
+)
+
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SRCS} ${MOD_SRCS})
+source_group(TREE ${CMAKE_CURRENT_BINARY_DIR} FILES ${MOD_GEN_SRCS} PREFIX gen)
+
+if (VS_GEN)
+add_executable(${PROJECT_NAME} ${SRCS} ${MOD_SRCS} ${MOD_GEN_SRCS})
+else()
 add_executable(${PROJECT_NAME} ${SRCS})
+target_sources(${PROJECT_NAME} PRIVATE FILE_SET CXX_MODULES FILES ${MOD_SRCS} ${MOD_GEN_SRCS})
+endif()
 
 add_win32_icon(${PROJECT_NAME} "appicon.ico")
 target_compile_options(${PROJECT_NAME} PRIVATE ${BF_ADDITIONAL_COMPILE_FLAGS})
@@ -167,10 +213,11 @@ target_include_directories(${PROJECT_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}/src
 )
-target_link_libraries(${PROJECT_NAME} fmt::fmt mbits::args SDL3::SDL3 SDL3_image::SDL3_image)
+target_link_libraries(${PROJECT_NAME} fmt::fmt mbits::args PNG::PNG)
 set_target_properties(${PROJECT_NAME} PROPERTIES
   VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
 )
+# target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
 
 if(WIN32)
     target_link_options(${PROJECT_NAME} PRIVATE /ENTRY:wmainCRTStartup)
